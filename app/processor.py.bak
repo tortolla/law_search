@@ -1,0 +1,119 @@
+import os
+
+from app.retrieval.search import (
+    search_bm25_frida,
+    search_bm25_frida_rrf,
+    search_bm25_frida_weighted,
+)
+from app.retrieval.search_milvus import search_bm25_milvus_weighted
+from app.retrieval.context import expand_context_chunks as expand_context_chunks_impl
+
+
+def _use_milvus() -> bool:
+    return os.getenv("VECTOR_BACKEND", "numpy").strip().lower() == "milvus"
+
+
+def _search(query: str, top_k: int, search_mode: str):
+    if _use_milvus():
+        if search_mode not in {"hybrid", "weighted"}:
+            raise ValueError(
+                f"search_mode={search_mode} is not supported with VECTOR_BACKEND=milvus. "
+                "Use search_mode='weighted' or 'hybrid'."
+            )
+        return search_bm25_milvus_weighted(query, top_k=top_k)
+
+    if search_mode == "hybrid":
+        return search_bm25_frida(query, top_k=top_k)
+    if search_mode == "weighted":
+        return search_bm25_frida_weighted(query, top_k=top_k)
+    if search_mode == "rrf":
+        return search_bm25_frida_rrf(query, top_k=top_k)
+
+    raise ValueError(f"Неизвестный search_mode: {search_mode}")
+
+
+def process_text(text: str) -> str:
+    query = text.strip()
+    if not query:
+        return "Пустой запрос"
+
+    results = _search(query=query, top_k=5, search_mode="weighted")
+
+    blocks = []
+    for i, row in results.iterrows():
+        score_name = "hybrid_score" if "hybrid_score" in row else "rrf_score"
+        score_value = row[score_name]
+
+        block = (
+            f"[{i+1}] {row['title']}\n"
+            f"category: {row['category']}\n"
+            f"doc_id: {row['doc_id']}\n"
+            f"chunk_id: {row['chunk_id']}\n"
+            f"chunk_ix: {row['chunk_ix']}\n"
+            f"{score_name}: {score_value:.6f}\n"
+            f"bm25_score: {row['bm25_score']:.6f}\n"
+            f"frida_score: {row['frida_score']:.6f}\n"
+            f"txt_path: {row.get('txt_path')}\n"
+            f"meta_file: {row.get('meta_file')}\n"
+            f"method: {row.get('method')}\n"
+            f"chunk_text:\n{row.get('chunk_text')}"
+        )
+        blocks.append(block)
+
+    return "\n\n" + ("\n" + "=" * 100 + "\n\n").join(blocks)
+
+
+def process_search(
+    query: str,
+    top_k: int = 5,
+    search_mode: str = "hybrid",
+) -> dict:
+    query = query.strip()
+    if not query:
+        raise ValueError("Пустой запрос")
+
+    results = _search(query=query, top_k=top_k, search_mode=search_mode)
+
+    items = []
+    for i, row in results.iterrows():
+        items.append(
+            {
+                "rank": i + 1,
+                "doc_id": str(row["doc_id"]),
+                "title": str(row["title"]) if row.get("title") is not None else None,
+                "category": str(row["category"]) if row.get("category") is not None else None,
+                "chunk_id": str(row["chunk_id"]),
+                "chunk_ix": int(row["chunk_ix"]),
+                "hybrid_score": float(row["hybrid_score"]) if "hybrid_score" in row and row["hybrid_score"] is not None else None,
+                "bm25_score": float(row["bm25_score"]) if "bm25_score" in row and row["bm25_score"] is not None else None,
+                "frida_score": float(row["frida_score"]) if "frida_score" in row and row["frida_score"] is not None else None,
+                "rrf_score": float(row["rrf_score"]) if "rrf_score" in row and row["rrf_score"] is not None else None,
+                "txt_path": str(row["txt_path"]) if row.get("txt_path") is not None else None,
+                "meta_file": str(row["meta_file"]) if row.get("meta_file") is not None else None,
+                "chunk_text": str(row["chunk_text"]) if row.get("chunk_text") is not None else "",
+                "method": str(row["method"]) if row.get("method") is not None else None,
+            }
+        )
+
+    return {
+        "ok": True,
+        "query": query,
+        "top_k": top_k,
+        "search_mode": search_mode,
+        "vector_backend": os.getenv("VECTOR_BACKEND", "numpy"),
+        "items": items,
+    }
+
+
+def process_expand_context(
+    doc_id: str,
+    chunk_ix: int,
+    window_before: int = 2,
+    window_after: int = 2,
+) -> dict:
+    return expand_context_chunks_impl(
+        doc_id=doc_id,
+        chunk_ix=chunk_ix,
+        window_before=window_before,
+        window_after=window_after,
+    )

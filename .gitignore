@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Secrets / local config
+.env
+
+# Raw downloaded documents
+data_big/*
+!data_big/.gitkeep
+
+# Generated data, but keep gold eval dataset
+data/*
+!data/.gitkeep
+!data/processed/
+data/processed/*
+!data/processed/.gitkeep
+!data/processed/dataset_fixed.json
+!data/indexes/
+data/indexes/*
+!data/indexes/.gitkeep
+!data/indexes/bm25/
+data/indexes/bm25/*
+!data/indexes/bm25/.gitkeep
+!data/indexes/frida/
+data/indexes/frida/*
+!data/indexes/frida/.gitkeep
+
+# Downloaded models
+models/*
+!models/.gitkeep
+
+# Generated reports/results/logs
+reports/*
+!reports/.gitkeep
+results/*
+!results/.gitkeep
+logs/*
+!logs/.gitkeep
+
+# Milvus local volumes
+volumes/
+infra/milvus/volumes/
+
+# OS / notebooks
+.DS_Store
+.ipynb_checkpoints/

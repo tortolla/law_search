@@ -1,0 +1,26 @@
+.venv/
+.git/
+__pycache__/
+*.pyc
+.DS_Store
+.ipynb_checkpoints/
+
+results/
+reports/
+
+*.pdf
+*.jsonl
+*.csv
+*.parquet
+*.pkl
+*.pickle
+*.npy
+*.npz
+*.faiss
+*.sqlite
+*.db
+
+Без названия 2.key
+результаты.pdf
+search_first_try.ipynb
+dataset_old.json
