@@ -62,3 +62,4 @@ uvicorn==0.42.0
 uvicorn[standard]
 pymilvus>=2.5,<2.6
 setuptools<82
+requests>=2.31.0
