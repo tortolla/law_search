@@ -1,4 +1,4 @@
-Production-ready local retrieval service for a legal document corpus.
+## Production-ready local retrieval service for a legal document corpus.
 
 The project provides:
 
