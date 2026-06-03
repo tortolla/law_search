@@ -1,33 +1,35 @@
-[README.md](https://github.com/user-attachments/files/28545045/README.md)
-# Law Search
+[README_pro.md](https://github.com/user-attachments/files/28545251/README_pro.md)# Law Search
 
-Локальный гибридный поиск по корпусу нормативных документов.
+Production-ready local retrieval service for a legal document corpus.
 
-Кратко, что делает проект:
+The project provides:
 
-- скачивает корпус с Яндекс.Диска;
-- режет документы на смысловые чанки;
-- строит BM25 lexical index;
-- считает FRIDA dense embeddings;
-- поднимает Milvus vector database;
-- запускает FastAPI HTTP API;
-- проверяет поиск через smoke-test;
-- считает document-level retrieval eval.
+- corpus download from Yandex Disk;
+- document validation and preprocessing;
+- semantic chunking with metadata enrichment;
+- BM25 lexical index;
+- FRIDA dense embeddings;
+- Milvus vector database;
+- hybrid BM25 + dense retrieval;
+- FastAPI HTTP API for local / Dify integration;
+- document-level retrieval evaluation.
 
 ---
 
-# 1. Быстрый запуск с нуля
+## 1. Quick start
 
-## 1.1. Системные зависимости на Ubuntu/Debian
+### 1.1. Install system dependencies
+
+Ubuntu/Debian:
 
 ```bash
 apt update
-apt install -y python3 python3-venv python3-pip curl git docker.io docker-compose screen
+apt install -y python3 python3-venv python3-pip curl git docker.io docker-compose
 systemctl start docker
 systemctl enable docker
 ```
 
-Проверка:
+Check:
 
 ```bash
 python3 --version
@@ -37,7 +39,7 @@ docker-compose --version
 
 ---
 
-## 1.2. Скачать проект
+### 1.2. Clone repository
 
 ```bash
 git clone https://github.com/tortolla/law_search.git
@@ -45,77 +47,53 @@ cd law_search
 cp .env.example .env
 ```
 
----
-
-## 1.3. Запустить полный setup
-
-Рекомендуется запускать через `screen`, потому что полный setup может идти долго.
-
-```bash
-screen -S law_setup
-```
-
-Внутри `screen`:
-
-```bash
-cd law_search
-./run_setup.sh 2>&1 | tee setup.log
-```
-
-Выйти из `screen`, не останавливая процесс:
-
-```text
-Ctrl+A
-D
-```
-
-Вернуться:
-
-```bash
-screen -r law_setup
-```
-
-Смотреть лог без входа в `screen`:
-
-```bash
-tail -f setup.log
-```
-
-Успешное завершение:
-
-```text
-[OK] FULL SETUP COMPLETED
-```
+Edit `.env` only if you need to change API keys, data URL, Milvus host/port, or collection name.
 
 ---
 
-# 2. Что делает `run_setup.sh`
-
-`run_setup.sh` — главный скрипт полного развёртывания.
-
-Он делает:
-
-1. создаёт `.venv`;
-2. ставит зависимости из `requirements.txt`;
-3. скачивает или проверяет FRIDA model;
-4. запускает Docker / Docker Compose;
-5. поднимает Milvus stack: `etcd`, `minio`, `milvus-standalone`;
-6. скачивает корпус в `data_big/`;
-7. валидирует raw data;
-8. строит `docs.parquet` и `chunks.parquet`;
-9. строит BM25 index;
-10. считает FRIDA embeddings;
-11. загружает embeddings в Milvus collection;
-12. валидирует индексы;
-13. запускает retrieval eval.
-
-Обычный запуск:
+### 1.3. Run full setup
 
 ```bash
 ./run_setup.sh
 ```
 
-Полезные режимы:
+Successful completion:
+
+```text
+[OK] FULL SETUP COMPLETED
+```
+
+The setup may take a long time because it downloads the corpus, builds chunks, computes FRIDA embeddings, loads vectors into Milvus, and runs evaluation.
+
+---
+
+## 2. Main scripts
+
+### `run_setup.sh`
+
+Full pipeline from repository checkout to working Milvus-backed search.
+
+```bash
+./run_setup.sh
+```
+
+Main stages:
+
+1. creates `.venv`;
+2. installs Python dependencies;
+3. downloads/checks FRIDA model;
+4. starts Docker Compose stack;
+5. starts Milvus, MinIO, etcd;
+6. downloads raw corpus into `data_big/`;
+7. validates raw data;
+8. builds `docs.parquet` and `chunks.parquet`;
+9. builds BM25 index;
+10. computes FRIDA embeddings;
+11. loads vectors into Milvus;
+12. validates indexes;
+13. runs retrieval evaluation.
+
+Useful flags:
 
 ```bash
 ./run_setup.sh --skip-download
@@ -124,7 +102,7 @@ tail -f setup.log
 ./run_setup.sh --force
 ```
 
-Пример продолжения, если данные и embeddings уже есть, но нужно заново загрузить Milvus и посчитать eval:
+Typical continuation run when data, chunks, BM25, and embeddings already exist but Milvus should be rebuilt and eval should be rerun:
 
 ```bash
 ./run_setup.sh --skip-download --skip-embeddings
@@ -132,41 +110,27 @@ tail -f setup.log
 
 ---
 
-# 3. Shell-скрипты
+### `run_local.sh`
 
-## `run_setup.sh`
-
-Полный setup проекта с нуля.
-
-```bash
-./run_setup.sh
-```
-
-Использовать первым.
-
----
-
-## `run_local.sh`
-
-Запускает локальный FastAPI server.
+Starts the local FastAPI server.
 
 ```bash
 ./run_local.sh
 ```
 
-По умолчанию сервер слушает:
+Default address:
 
 ```text
 http://127.0.0.1:8000
 ```
 
-Health-check:
+Health check:
 
 ```bash
 curl "http://127.0.0.1:8000/health"
 ```
 
-Ожидаемый ответ:
+Expected response:
 
 ```json
 {"ok":true,"service":"local_dify_bridge"}
@@ -174,17 +138,17 @@ curl "http://127.0.0.1:8000/health"
 
 ---
 
-## `run_search_test.sh`
+### `run_search_test.sh`
 
-Проверяет, что локальный поиск работает через API.
+Runs a smoke test against the local search API.
 
-Перед запуском должен работать `run_local.sh`.
+The API must already be running through `run_local.sh`.
 
 ```bash
 ./run_search_test.sh
 ```
 
-Ожидаемые признаки в JSON-ответе:
+Expected response fields:
 
 ```json
 "ok": true
@@ -195,15 +159,15 @@ curl "http://127.0.0.1:8000/health"
 
 ---
 
-## `run_eval.sh`
+### `run_eval.sh`
 
-Отдельно запускает retrieval evaluation по gold dataset.
+Runs document-level retrieval evaluation on the gold dataset.
 
 ```bash
 ./run_eval.sh
 ```
 
-Результаты сохраняются в:
+Output directory:
 
 ```text
 reports/eval/weighted_doc_level/
@@ -211,15 +175,17 @@ reports/eval/weighted_doc_level/
 
 ---
 
-# 4. Что генерируется после setup
+## 3. Generated artifacts
 
-## Raw data
+The repository does not store heavy generated artifacts. They are created by `run_setup.sh`.
+
+### Raw corpus
 
 ```text
 data_big/
 ```
 
-Там лежат скачанные документы по категориям:
+Expected top-level categories:
 
 ```text
 construction_laws/
@@ -230,9 +196,7 @@ mining_laws/
 oil_laws/
 ```
 
----
-
-## Processed data
+### Processed corpus
 
 ```text
 data/processed/docs.parquet
@@ -242,35 +206,43 @@ data/processed/chunks.jsonl
 data/processed/chunk_stats.json
 ```
 
----
-
-## BM25 index
+### BM25 index
 
 ```text
 data/indexes/bm25/bm25.pkl
 data/indexes/bm25/bm25_info.json
 ```
 
----
-
-## FRIDA embeddings
+### FRIDA embeddings
 
 ```text
 data/indexes/frida/embeddings.npy
 data/indexes/frida/model_info.json
 ```
 
----
+### Milvus
 
-## Milvus collection
-
-По умолчанию используется collection:
+Default collection:
 
 ```text
 frida_chunks
 ```
 
-Milvus endpoints:
+Docker services:
+
+```bash
+docker-compose ps
+```
+
+Expected services:
+
+```text
+etcd
+minio
+milvus-standalone
+```
+
+Ports:
 
 ```text
 19530  Milvus gRPC
@@ -279,21 +251,13 @@ Milvus endpoints:
 9001   MinIO console
 ```
 
-Проверка контейнеров:
-
-```bash
-docker-compose ps
-```
-
----
-
-## Eval reports
+### Eval reports
 
 ```text
 reports/eval/weighted_doc_level/
 ```
 
-Основные файлы:
+Main files:
 
 ```text
 overall.csv
@@ -309,111 +273,33 @@ plots/doc_error_curve.png
 
 ---
 
-# 5. Валидационный датасет
+## 4. Gold evaluation dataset
 
-В репозитории лежит gold dataset:
+The repository includes:
 
 ```text
 data/processed/dataset_fixed.json
 ```
 
-Он нужен для проверки качества поиска.
+It is used by `run_eval.sh` and by the evaluation stage inside `run_setup.sh`.
 
-Важно:
+Important:
 
-- `dataset_fixed.json` лежит в GitHub;
-- тяжёлые артефакты не лежат в GitHub;
-- `chunks.parquet`, `embeddings.npy`, `bm25.pkl`, `data_big/`, `models/FRIDA/` генерируются локально через `run_setup.sh`.
-
----
-
-# 6. Как проверить, что всё работает
-
-## 6.1. Проверить setup
-
-```bash
-tail -n 100 setup.log
-```
-
-Должно быть:
-
-```text
-[OK] FULL SETUP COMPLETED
-```
+- `dataset_fixed.json` is committed to Git;
+- `data_big/`, `chunks.parquet`, `docs.parquet`, `bm25.pkl`, `embeddings.npy`, and `models/FRIDA/` are generated locally;
+- evaluation is primarily document-level; chunk-level metrics may be invalid after rechunking.
 
 ---
 
-## 6.2. Проверить Milvus
+## 5. API usage
 
-```bash
-docker-compose ps
-```
-
-Ожидаемо:
-
-```text
-etcd                healthy
-minio               healthy
-milvus-standalone   healthy
-```
-
----
-
-## 6.3. Проверить API
-
-Терминал 1:
-
-```bash
-./run_local.sh
-```
-
-Терминал 2:
-
-```bash
-curl "http://127.0.0.1:8000/health"
-```
-
----
-
-## 6.4. Проверить поиск
-
-```bash
-./run_search_test.sh
-```
-
-Ожидаемо:
-
-```json
-"ok": true
-"vector_backend": "milvus"
-"method": "bm25_milvus_weighted"
-```
-
----
-
-## 6.5. Проверить eval
-
-```bash
-./run_eval.sh
-```
-
-Ожидаемо:
-
-```text
-[OK] retrieval evaluation completed
-```
-
----
-
-# 7. API для Dify / внешнего клиента
-
-Основная ручка:
+### 5.1. Search endpoint
 
 ```text
 POST /search_base_articles
 ```
 
-Пример локального запроса:
+Example:
 
 ```bash
 API_KEY=$(grep '^DIFY_API_KEY=' .env | cut -d '=' -f2-)
@@ -428,7 +314,7 @@ curl -s -X POST "http://127.0.0.1:8000/search_base_articles" \
   }'
 ```
 
-Ответ содержит:
+Response contains:
 
 ```text
 rank
@@ -446,25 +332,21 @@ dense_backend
 collection
 ```
 
----
+### 5.2. External access
 
-# 8. Запуск API для доступа извне
-
-`run_local.sh` поднимает сервер на:
+`run_local.sh` binds to localhost:
 
 ```text
 127.0.0.1:8000
 ```
 
-Это доступно только внутри сервера.
-
-Если нужно открыть API наружу:
+For external clients or Dify deployment, start FastAPI on all interfaces:
 
 ```bash
 .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-После этого внешний запрос:
+External request:
 
 ```bash
 curl -X POST "http://<SERVER_IP>:8000/search_base_articles" \
@@ -477,15 +359,77 @@ curl -X POST "http://<SERVER_IP>:8000/search_base_articles" \
   }'
 ```
 
-Для production-доступа лучше использовать firewall, nginx/reverse proxy и длинный API key.
+For production use, put the service behind firewall rules, nginx/reverse proxy, and a strong API key.
 
 ---
 
-# 9. Как заменить корпус данных
+## 6. Verification checklist
 
-Чтобы использовать другой корпус, нужно сохранить ожидаемую структуру `data_big/`.
+After `run_setup.sh`:
 
-## 9.1. Требуемая структура
+```bash
+docker-compose ps
+```
+
+Expected:
+
+```text
+etcd                healthy
+minio               healthy
+milvus-standalone   healthy
+```
+
+Check generated files:
+
+```bash
+ls -lh data/processed/docs.parquet
+ls -lh data/processed/chunks.parquet
+ls -lh data/indexes/bm25/bm25.pkl
+ls -lh data/indexes/frida/embeddings.npy
+```
+
+Start API:
+
+```bash
+./run_local.sh
+```
+
+In another terminal:
+
+```bash
+curl "http://127.0.0.1:8000/health"
+./run_search_test.sh
+```
+
+Run eval separately:
+
+```bash
+./run_eval.sh
+```
+
+Expected final markers:
+
+```text
+[OK] FULL SETUP COMPLETED
+[OK] retrieval evaluation completed
+```
+
+Expected search response fields:
+
+```json
+"ok": true
+"vector_backend": "milvus"
+"method": "bm25_milvus_weighted"
+"collection": "frida_chunks"
+```
+
+---
+
+## 7. Replacing the corpus
+
+To use another corpus, keep the same raw-data structure.
+
+### 7.1. Required structure
 
 ```text
 data_big/
@@ -501,15 +445,15 @@ data_big/
       ...
 ```
 
-Минимальные правила:
+Rules:
 
-- верхние папки должны оканчиваться на `_laws`;
-- внутри каждой категории должен быть `metadata.json`;
-- текстовые документы должны лежать в папках, оканчивающихся на `_md`;
-- документы должны быть в Markdown `.md`;
-- `metadata.json` должен соответствовать документам категории.
+- top-level corpus directories must end with `_laws`;
+- each category must contain `metadata.json`;
+- Markdown documents must be located under folders ending with `_md`;
+- documents must be `.md`;
+- `metadata.json` must correspond to the documents in that category.
 
-Примеры валидных категорий:
+Valid category examples:
 
 ```text
 construction_laws
@@ -520,11 +464,9 @@ mining_laws
 oil_laws
 ```
 
----
+### 7.2. Full rebuild for a new local corpus
 
-## 9.2. Пересобрать всё под новый корпус
-
-Удалить старые generated artifacts:
+Remove generated artifacts:
 
 ```bash
 rm -rf data_big/*
@@ -543,31 +485,37 @@ rm -rf data/indexes/frida/*
 touch data/indexes/frida/.gitkeep
 ```
 
-Положить новый корпус в `data_big/`.
+Place the new corpus into `data_big/`.
 
-Запустить полную пересборку:
-
-```bash
-./run_setup.sh --force
-```
-
-Если данные уже лежат локально и скачивать ничего не надо:
+Run:
 
 ```bash
 ./run_setup.sh --skip-download --force
 ```
 
+If the corpus should be downloaded from a new Yandex Disk folder, set in `.env`:
+
+```env
+PUBLIC_DATA_URL=<new_public_yandex_disk_url>
+```
+
+Then run:
+
+```bash
+./run_setup.sh --force
+```
+
 ---
 
-# 10. `.env`
+## 8. Environment configuration
 
-Перед первым запуском:
+Create `.env` from the template:
 
 ```bash
 cp .env.example .env
 ```
 
-Основные параметры:
+Core variables:
 
 ```env
 DIFY_API_KEY=change-me-ingest-very-long-key
@@ -593,9 +541,11 @@ GOLD_DATASET_PATH=data/processed/dataset_fixed.json
 
 ---
 
-# 11. Что не лежит в GitHub
+## 9. Git policy
 
-В GitHub не кладутся:
+The repository should contain code, configs, scripts, README, and the gold dataset only.
+
+Do not commit:
 
 ```text
 .env
@@ -611,80 +561,43 @@ results/
 *.log
 ```
 
-Они создаются локально через `run_setup.sh`.
+These files are generated by setup.
 
 ---
 
-# 12. Проверенная команда для руководителя
+## 10. Chunking logic
 
-Минимальный сценарий проверки:
+The chunking stage is designed for retrieval, not for raw storage.
 
-```bash
-git clone https://github.com/tortolla/law_search.git
-cd law_search
-cp .env.example .env
-./run_setup.sh
-./run_local.sh
-```
+The pipeline:
 
-Во втором терминале:
+- parses Markdown documents into logical text units;
+- preserves document-level metadata;
+- uses headings, pages, paragraphs, and long-piece splitting;
+- applies overlap for long fragments;
+- assigns stable `doc_id`, `chunk_id`, and `chunk_ix`;
+- enriches each chunk with document title, legal category, source group, source section, and keywords;
+- writes enriched text into `chunks.parquet` and `chunks.jsonl`;
+- feeds the same enriched chunk text into BM25 and FRIDA.
 
-```bash
-cd law_search
-./run_search_test.sh
-```
-
-Отдельно проверить eval:
-
-```bash
-./run_eval.sh
-```
-
----
-
-# 13. Как устроено разбиение на чанки
-
-Разбиение документов не является тупой нарезкой по фиксированному числу символов.
-
-Pipeline делает смысловое chunking-представление:
-
-- документ разбивается на логические фрагменты;
-- учитываются заголовки, страницы, абзацы и длинные куски;
-- слишком длинные фрагменты дополнительно делятся с overlap;
-- сохраняются `doc_id`, `chunk_id`, `chunk_ix`;
-- в каждый chunk добавляется контекст документа;
-- добавляются название документа, категория права, группа источника, раздел, ключевые слова;
-- чанки становятся самодостаточными для retrieval;
-- BM25 получает текст с метаданными;
-- FRIDA embedding считается по тому же enriched chunk text.
-
-То есть каждый chunk содержит не только фрагмент текста, но и навигационный/смысловой контекст:
+A chunk contains both text and retrieval context:
 
 ```text
-Категория права
-Группа источника
-Раздел источника
-Ключевые слова
-Документ
-Текст фрагмента
+Legal category
+Source group
+Source section
+Keywords
+Document title
+Chunk text
 ```
 
-Это повышает устойчивость поиска: запрос может попасть не только по точной фразе, но и по смыслу, названию документа, категории, ведомству или связанным ключевым словам.
+This improves retrieval robustness: a query can match by exact phrase, semantic content, document title, authority/source, legal category, or keywords.
 
 ---
 
-# 14. Кратко по архитектуре поиска
+## 11. Retrieval architecture
 
-Поиск работает так:
-
-1. пользователь отправляет query;
-2. BM25 ищет lexical candidates;
-3. FRIDA кодирует query в dense vector;
-4. Milvus ищет ближайшие vector candidates;
-5. результаты объединяются weighted fusion;
-6. API возвращает top-k chunks с текстом, scores и metadata.
-
-Базовый режим:
+Default mode:
 
 ```text
 search_mode = weighted
@@ -693,27 +606,42 @@ frida_weight = 0.7
 candidate_k = 1000
 ```
 
+Flow:
+
+1. request enters FastAPI;
+2. BM25 retrieves lexical candidates;
+3. FRIDA encodes the query;
+4. Milvus retrieves dense vector candidates;
+5. scores are normalized and combined;
+6. API returns ranked chunks with scores and metadata.
+
 ---
 
-# 15. Основные признаки успешной установки
+## 12. Minimal operational sequence
 
-После `run_setup.sh`:
+Full deployment:
 
-```text
-[OK] FULL SETUP COMPLETED
+```bash
+git clone https://github.com/tortolla/law_search.git
+cd law_search
+cp .env.example .env
+./run_setup.sh
 ```
 
-После `run_search_test.sh`:
+Run API:
 
-```json
-"ok": true
-"vector_backend": "milvus"
-"method": "bm25_milvus_weighted"
-"collection": "frida_chunks"
+```bash
+./run_local.sh
 ```
 
-После `run_eval.sh`:
+Search smoke test:
 
-```text
-[OK] retrieval evaluation completed
+```bash
+./run_search_test.sh
+```
+
+Evaluation:
+
+```bash
+./run_eval.sh
 ```
