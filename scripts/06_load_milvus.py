@@ -254,7 +254,7 @@ def make_schema(dim: int) -> CollectionSchema:
         FieldSchema(
             name="title",
             dtype=DataType.VARCHAR,
-            max_length=2048,
+            max_length=5000,
             description="Document title.",
         ),
         FieldSchema(
@@ -371,7 +371,7 @@ def insert_batches(
             part["doc_id"].map(lambda x: safe_str(x, 128)).tolist(),
             part["category"].map(lambda x: safe_str(x, 128)).tolist(),
             part["source_group"].map(lambda x: safe_str(x, 128)).tolist(),
-            part["title"].map(lambda x: safe_str(x, 2048)).tolist(),
+            part["title"].map(lambda x: safe_str(x, 5000)).tolist(),
             part["chunk_ix"].fillna(0).astype(int).tolist(),
             embeddings[start:end].tolist(),
         ]

@@ -17,6 +17,77 @@ fi
 
 export PYTHONPATH="${PYTHONPATH:-.}"
 
+ensure_docker_stack() {
+  echo
+  echo "===================================================================================================="
+  echo "CHECK DOCKER / DOCKER COMPOSE"
+  echo "===================================================================================================="
+
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "[WARN] docker command not found"
+
+    if [[ "$(id -u)" == "0" ]] && command -v apt >/dev/null 2>&1; then
+      echo "[INFO] installing docker.io via apt"
+      apt update
+      apt install -y docker.io
+    else
+      echo "[ERROR] Docker is not installed"
+      echo "Install it manually:"
+      echo "  apt update"
+      echo "  apt install -y docker.io"
+      exit 1
+    fi
+  fi
+
+  if command -v systemctl >/dev/null 2>&1; then
+    echo "[INFO] starting/enabling docker service"
+    systemctl start docker || true
+    systemctl enable docker || true
+  fi
+
+  if command -v docker-compose >/dev/null 2>&1; then
+    COMPOSE_CMD="docker-compose"
+    echo "[OK] Docker Compose command: $COMPOSE_CMD"
+    return 0
+  fi
+
+  if docker compose version >/dev/null 2>&1; then
+    COMPOSE_CMD="docker compose"
+    echo "[OK] Docker Compose command: $COMPOSE_CMD"
+    return 0
+  fi
+
+  echo "[WARN] docker compose plugin / docker-compose not found"
+
+  if [[ "$(id -u)" == "0" ]] && command -v apt >/dev/null 2>&1; then
+    echo "[INFO] installing docker-compose via apt"
+    apt update
+    apt install -y docker-compose
+  else
+    echo "[ERROR] Docker Compose is not installed"
+    echo "Install it manually:"
+    echo "  apt update"
+    echo "  apt install -y docker-compose"
+    exit 1
+  fi
+
+  if command -v docker-compose >/dev/null 2>&1; then
+    COMPOSE_CMD="docker-compose"
+    echo "[OK] Docker Compose command: $COMPOSE_CMD"
+    return 0
+  fi
+
+  if docker compose version >/dev/null 2>&1; then
+    COMPOSE_CMD="docker compose"
+    echo "[OK] Docker Compose command: $COMPOSE_CMD"
+    return 0
+  fi
+
+  echo "[ERROR] Docker Compose installation failed or command is unavailable"
+  exit 1
+}
+
+
 RAW_DATA_DIR="${RAW_DATA_DIR:-data_big}"
 PROCESSED_DIR="${PROCESSED_DIR:-data/processed}"
 INDEXES_DIR="${INDEXES_DIR:-data/indexes}"
@@ -72,6 +143,12 @@ dir_exists_nonempty() {
   [[ -d "$1" && -n "$(ls -A "$1" 2>/dev/null || true)" ]]
 }
 
+raw_data_has_law_dirs() {
+  local dir="$1"
+  [[ -d "$dir" ]] || return 1
+  find "$dir" -maxdepth 1 -type d -name "*_laws" | grep -q .
+}
+
 wait_for_milvus() {
   echo "[INFO] waiting for Milvus at ${MILVUS_HOST}:${MILVUS_PORT}"
 
@@ -112,9 +189,19 @@ echo "SKIP_EMBEDDINGS:    $SKIP_EMBEDDINGS"
 echo "SKIP_EVAL:          $SKIP_EVAL"
 echo "===================================================================================================="
 
-if [[ ! -x ".venv/bin/python" ]]; then
+if [[ ! -x ".venv/bin/python" || ! -x ".venv/bin/pip" ]]; then
   echo "[INFO] creating virtual environment"
-  python3 -m venv .venv
+  rm -rf .venv
+
+  if ! python3 -m venv .venv; then
+    echo
+    echo "[ERROR] failed to create Python virtual environment"
+    echo "On Ubuntu/Debian install:"
+    echo "  apt update"
+    echo "  apt install -y python3 python3-venv python3-pip"
+    echo
+    exit 1
+  fi
 fi
 
 run_step "INSTALL REQUIREMENTS" \
@@ -123,16 +210,18 @@ run_step "INSTALL REQUIREMENTS" \
 run_step "00 DOWNLOAD / CHECK FRIDA MODEL" \
   .venv/bin/python scripts/00_download_frida_model.py
 
-run_step "00 CHECK ENV" \
-  .venv/bin/python scripts/00_check_env.py
+ensure_docker_stack
 
 run_step "START MILVUS" \
-  docker-compose up -d etcd minio milvus-standalone
+  $COMPOSE_CMD up -d etcd minio milvus-standalone
 
 wait_for_milvus
 
+run_step "00 CHECK ENV" \
+  .venv/bin/python scripts/00_check_env.py
+
 if [[ "$SKIP_DOWNLOAD" == "0" ]]; then
-  if [[ "$FORCE" == "1" || ! dir_exists_nonempty "$RAW_DATA_DIR" ]]; then
+  if [[ "$FORCE" == "1" ]] || ! raw_data_has_law_dirs "$RAW_DATA_DIR"; then
     run_step "01 DOWNLOAD DATA" \
       .venv/bin/python scripts/01_download_data.py
   else
@@ -145,14 +234,14 @@ fi
 run_step "02 VALIDATE RAW DATA" \
   .venv/bin/python scripts/02_validate_raw_data.py
 
-if [[ "$FORCE" == "1" || ! file_exists_nonempty "$PROCESSED_DIR/chunks.parquet" ]]; then
+if [[ "$FORCE" == "1" ]] || ! file_exists_nonempty "$PROCESSED_DIR/chunks.parquet"; then
   run_step "03 BUILD CHUNKS" \
     .venv/bin/python scripts/03_build_chunks.py
 else
   echo "[SKIP] chunks already exist: $PROCESSED_DIR/chunks.parquet"
 fi
 
-if [[ "$FORCE" == "1" || ! file_exists_nonempty "$INDEXES_DIR/bm25/bm25.pkl" ]]; then
+if [[ "$FORCE" == "1" ]] || ! file_exists_nonempty "$INDEXES_DIR/bm25/bm25.pkl"; then
   run_step "04 BUILD BM25" \
     .venv/bin/python scripts/04_build_bm25.py
 else
@@ -160,7 +249,7 @@ else
 fi
 
 if [[ "$SKIP_EMBEDDINGS" == "0" ]]; then
-  if [[ "$FORCE" == "1" || ! file_exists_nonempty "$INDEXES_DIR/frida/embeddings.npy" ]]; then
+  if [[ "$FORCE" == "1" ]] || ! file_exists_nonempty "$INDEXES_DIR/frida/embeddings.npy"; then
     run_step "05 BUILD FRIDA EMBEDDINGS" \
       .venv/bin/python scripts/05_build_frida_embeddings.py --device auto
   else
