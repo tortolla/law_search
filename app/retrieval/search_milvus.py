@@ -168,7 +168,7 @@ def _milvus_candidates(
     res = c.search(
         data=[qvec],
         anns_field="embedding",
-        param={"metric_type": "IP", "params": {"ef": 128}},
+        param={"metric_type": "IP", "params": {"ef": max(128, int(candidate_k))}},
         limit=candidate_k,
         output_fields=["chunk_id", "doc_id", "category", "source_group", "title", "chunk_ix"],
     )
