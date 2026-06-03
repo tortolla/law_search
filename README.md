@@ -1,9 +1,4 @@
-## Production-ready local retrieval service for a legal document corpus.
-
-The project provides:
-
-- corpus download from Yandex Disk;
-- document validation and preprocessing;# Law Search
+# Law Search
 
 Production-ready local retrieval service for a legal document corpus.
 
